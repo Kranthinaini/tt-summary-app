@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
+from openpyxl.styles import PatternFill, Font
 
 st.set_page_config(page_title="TT Summary Report", layout="wide")
 
@@ -250,9 +251,24 @@ if credit_file is not None and db_file is not None:
             ignore_index=True
         )
 
+        # Grand Total Row
+        grand_total_row = pd.DataFrame({
+            "Cluster": ["GRAND TOTAL"],
+            "TCM_Submitted": [result["TCM_Submitted"].sum()],
+            "Rejected": [result["Rejected"].sum()],
+            "Approved": [result["Approved"].sum()],
+            "DB_Count": [result["DB_Count"].sum()],
+            "DB_Amount": [result["DB_Amount"].sum()]
+        })
+
+        final_report = pd.concat(
+            [final_report, grand_total_row],
+            ignore_index=True
+        )
+
+
         final_report = final_report[
             [
-                "Territory",
                 "Cluster",
                 "TCM_Submitted",
                 "Rejected",
@@ -266,26 +282,77 @@ if credit_file is not None and db_file is not None:
 
         st.subheader("Grand Total")
         st.dataframe(total_row, use_container_width=True)
-
         output = BytesIO()
 
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
+
             final_report.to_excel(
                 writer,
                 sheet_name="TT Summary",
                 index=False
             )
-            total_row.to_excel(
-                writer,
-                sheet_name="Grand Total",
-                index=False
+
+            workbook = writer.book
+
+            # TT Summary Sheet
+            ws = writer.sheets["TT Summary"]
+
+            header_fill = PatternFill(
+                start_color="1F4E78",
+                end_color="1F4E78",
+                fill_type="solid"
             )
+
+            header_font = Font(
+                color="FFFFFF",
+                bold=True
+            )
+
+            tt_fill = PatternFill(
+                start_color="FFF2CC",
+                end_color="FFF2CC",
+                fill_type="solid"
+            )
+
+            tt_font = Font(
+                bold=True
+            )
+            grand_fill = PatternFill(
+                start_color="548235",
+                end_color="548235",
+                fill_type="solid"
+            )
+
+            grand_font = Font(
+                color="FFFFFF",
+                bold=True
+            )
+
+            # Header formatting
+            for cell in ws[1]:
+                cell.fill = header_fill
+                cell.font = header_font
+
+            # Territory Total Rows
+            for row in ws.iter_rows(min_row=2):
+                cluster_value = str(row[0].value)
+
+                if cluster_value.startswith("TOTAL-"):
+                    for cell in row:
+                        cell.fill = tt_fill
+                        cell.font = tt_font
+
+                elif cluster_value == "GRAND TOTAL":
+                    for cell in row:
+                        cell.fill = grand_fill
+                        cell.font = grand_font
+        output.seek(0)
 
         st.download_button(
             label="Download TT Summary",
             data=output.getvalue(),
             file_name="TT_Summary.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        )           
         #python -m streamlit run newreport.py
         #python -m streamlit run newreport.py
